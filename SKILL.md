@@ -7,12 +7,13 @@ description: Reframe a video into a subject-centered edit using ffmpeg plus pers
 
 ## Workflow
 
-Before running the script, identify two inputs:
+Before rendering anything, identify three inputs:
 
 1. The target subject to track, such as "rightmost man in yellow shirt", "speaker in white hoodie", or "center dancer".
 2. The output ratio, such as `9:16`, `1:1`, `4:5`, or `16:9`.
+3. The subject's position when there are multiple similar people, such as "right-side second male", "front row center", "left of the red-shirt dancer", or "the black-jacket dancer with the light cap".
 
-If the user did not specify either one, ask a short question before editing.
+If the user did not specify the subject, output ratio, or enough position detail to distinguish similar people, ask a short question before editing.
 
 Use `scripts/reframe_subject.py` for moving-camera subject tracking. It does:
 
@@ -27,6 +28,8 @@ Use `scripts/reframe_subject.py` for moving-camera subject tracking. It does:
 Default output is 9:16, 1080x1920, H.264, CRF 18, unless the user requests another ratio.
 
 For tight crops where the subject should stay centered and nearby people should be removed, first try a fixed crop if the subject stays within a small region. Fixed crop is simpler and avoids YOLO jumping between similar people.
+
+When two or more subjects share clothing color, do not rely on color alone. Use the user's relative-position description first, inspect sampled frames, and choose either a fixed crop or a patched crop path that keeps that specific person centered.
 
 ## Commands
 
@@ -88,6 +91,26 @@ ffmpeg -hide_banner -y -i input.mp4 \
 
 For fixed crops, choose `crop_w:crop_h` to match the requested ratio, then choose `x` and `y` from sampled frames so the target is centered and never clipped. For `4:3`, examples include `480:360`, `520:390`, `560:420`, and `960:720`.
 
+For a wide 1280x720 source where the target is the right-side second person and should stay in a stable 4:3 frame, a simple full-height crop often works:
+
+```bash
+ffmpeg -hide_banner -y -i input.mp4 \
+  -vf "crop=960:720:200:0:exact=1,scale=1920:1440:flags=lanczos,setsar=1" \
+  -map 0:v:0 -map '0:a?' \
+  -c:v libx264 -crf 18 -preset medium -c:a copy -movflags +faststart \
+  output_4x3_right_second_fixed.mp4
+```
+
+Sample start/middle/end frames before final export:
+
+```bash
+mkdir -p /tmp/reframe-qa
+for t in 1 12 28; do
+  ffmpeg -hide_banner -loglevel error -y -ss "$t" -i output_4x3_right_second_fixed.mp4 \
+    -frames:v 1 "/tmp/reframe-qa/check_${t}.jpg"
+done
+```
+
 Same crop, clearer export:
 
 ```bash
@@ -106,6 +129,7 @@ Use this only from the original input, not from an already cropped export. Keep 
 - Prefer person bbox center over shirt-color center. Use color only to identify the target among multiple people.
 - Use Hermite smoothing for camera paths unless the user explicitly wants hard keyframe jumps.
 - Ask for the target subject and output ratio before rendering if they are not already clear.
+- If similar people could match the same clothing description, ask the user for relative position before rendering, for example "which black-shirt person: left one, right one, or right-side second male?"
 - If the subject still feels off-center, inspect the debug sheets before re-rendering.
 - If YOLO picks the wrong person during overlaps, increase continuity weight or manually patch the JSON plan instead of increasing sample FPS.
 - If automatic tracking jumps between two similar subjects, stop tracking and use a fixed crop. Sample start/middle/end frames, pick the tightest ratio-correct crop that keeps the target fully in frame, then adjust `x`/`y` until the target is centered.
