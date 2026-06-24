@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.jpg
+*.jpeg
+*.png
+*.pt
+*_debug/
+*.DS_Store

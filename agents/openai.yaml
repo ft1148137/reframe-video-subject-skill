@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reframe Video Subject"
+  short_description: "Center and refine a video subject crop"
+  default_prompt: "Use $reframe-video-subject to center the chosen person in this video at the requested ratio, with light clarity repair when needed."
